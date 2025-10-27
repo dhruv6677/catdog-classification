@@ -1,7 +1,6 @@
 import numpy as np
 from keras.models import load_model
 from keras.preprocessing import image
-
 class dogcat:
     def __init__(self,filename):
         self.filename =filename
