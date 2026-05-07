@@ -24,17 +24,10 @@ A deep learning project that classifies images of **Cats** and **Dogs** using a 
 
 # 🛠️ Requirements
 
-* Python 3.8+
-* TensorFlow 2.x
-* NumPy
-* Matplotlib
-* OpenCV or PIL
-* tqdm *(optional)*
-
 Install dependencies:
 
 ```bash
-pip install tensorflow numpy matplotlib opencv-python tqdm
+pip install -r requirements.txt
 ```
 
 ---
@@ -91,7 +84,7 @@ cd object-classifier
 ## 2️⃣ Install Dependencies
 
 ```bash
-pip install tensorflow numpy matplotlib opencv-python tqdm
+pip install -r requirements.txt
 ```
 
 ---
