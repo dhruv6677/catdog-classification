@@ -1,0 +1,4 @@
+__pycache__/
+.vscode/
+cats_and_dogs_filtered/
+*.pyc
