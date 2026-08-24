@@ -4,185 +4,545 @@
 <head>
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<title>Object Classification</title>
+	<title>Vision Scan — Object Classification</title>
 	<script src="https://cdn.tailwindcss.com"></script>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link
+		href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+		rel="stylesheet">
 	<link rel="shortcut icon" />
 	<style>
-		#loading {
-			position: fixed;
-			inset: 0;
-			z-index: 50;
-			background: rgba(255, 255, 255, 0.7);
-			display: none;
+		:root {
+			--bg: #1B1E20;
+			--surface: #232729;
+			--surface-2: #2B3033;
+			--border: #383E42;
+			--text: #ECE9E4;
+			--text-dim: #9BA1A5;
+			--amber: #FFB020;
+			--green: #4ADE80;
+			--red: #F87171;
 		}
 
-		.loader {
-			border: 8px solid #f3f3f3;
-			border-top: 8px solid #1b2d6b;
-			border-radius: 50%;
-			width: 60px;
-			height: 60px;
-			animation: spin 1.5s linear infinite;
+		* {
+			font-family: 'Inter', sans-serif;
+		}
+
+		.font-display {
+			font-family: 'Space Grotesk', sans-serif;
+		}
+
+		.font-mono {
+			font-family: 'IBM Plex Mono', monospace;
+		}
+
+		body {
+			background: var(--bg);
+			color: var(--text);
+		}
+
+		/* Faint grid backdrop, like a HUD */
+		.grid-backdrop {
+			background-image:
+				linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+				linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+			background-size: 28px 28px;
+		}
+
+		/* Viewfinder frame */
+		.viewfinder {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			position: relative;
+			overflow: hidden;
+		}
+
+		.bracket {
 			position: absolute;
-			top: 50%;
-			left: 50%;
-			transform: translate(-50%, -50%);
+			width: 26px;
+			height: 26px;
+			border-color: var(--text-dim);
+			transition: border-color 0.4s ease, width 0.4s ease, height 0.4s ease;
 		}
 
-		@keyframes spin {
+		.bracket.tl {
+			top: 14px;
+			left: 14px;
+			border-top: 2px solid;
+			border-left: 2px solid;
+		}
+
+		.bracket.tr {
+			top: 14px;
+			right: 14px;
+			border-top: 2px solid;
+			border-right: 2px solid;
+		}
+
+		.bracket.bl {
+			bottom: 14px;
+			left: 14px;
+			border-bottom: 2px solid;
+			border-left: 2px solid;
+		}
+
+		.bracket.br {
+			bottom: 14px;
+			right: 14px;
+			border-bottom: 2px solid;
+			border-right: 2px solid;
+		}
+
+		.viewfinder.scanning .bracket {
+			border-color: var(--amber);
+		}
+
+		.viewfinder.locked .bracket {
+			border-color: var(--green);
+			width: 34px;
+			height: 34px;
+		}
+
+		.viewfinder.error .bracket {
+			border-color: var(--red);
+		}
+
+		/* Scan line sweep */
+		.scanline {
+			position: absolute;
+			left: 0;
+			right: 0;
+			height: 2px;
+			background: linear-gradient(90deg, transparent, var(--amber), transparent);
+			box-shadow: 0 0 12px 1px var(--amber);
+			opacity: 0;
+			top: 0;
+		}
+
+		.viewfinder.scanning .scanline {
+			opacity: 1;
+			animation: sweep 1.4s ease-in-out infinite;
+		}
+
+		@keyframes sweep {
 			0% {
-				transform: translate(-50%, -50%) rotate(0deg);
+				top: 6%;
+			}
+
+			50% {
+				top: 92%;
 			}
 
 			100% {
-				transform: translate(-50%, -50%) rotate(360deg);
+				top: 6%;
+			}
+		}
+
+		/* Corner tick eyebrow labels */
+		.hud-label {
+			font-family: 'IBM Plex Mono', monospace;
+			font-size: 10px;
+			letter-spacing: 0.12em;
+			color: var(--text-dim);
+		}
+
+		.status-dot {
+			width: 7px;
+			height: 7px;
+			border-radius: 999px;
+			background: var(--text-dim);
+			transition: background 0.3s ease, box-shadow 0.3s ease;
+		}
+
+		.status-dot.live {
+			background: var(--amber);
+			box-shadow: 0 0 8px 1px var(--amber);
+			animation: pulse 1s ease-in-out infinite;
+		}
+
+		.status-dot.done {
+			background: var(--green);
+			box-shadow: 0 0 8px 1px var(--green);
+		}
+
+		.status-dot.fail {
+			background: var(--red);
+			box-shadow: 0 0 8px 1px var(--red);
+		}
+
+		@keyframes pulse {
+
+			0%,
+			100% {
+				opacity: 1;
+			}
+
+			50% {
+				opacity: 0.4;
+			}
+		}
+
+		/* Confidence meter */
+		.meter-track {
+			background: var(--surface-2);
+			border: 1px solid var(--border);
+			height: 10px;
+			border-radius: 999px;
+			overflow: hidden;
+		}
+
+		.meter-fill {
+			height: 100%;
+			width: 0%;
+			background: linear-gradient(90deg, var(--amber), var(--green));
+			border-radius: 999px;
+			transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+		}
+
+		.btn {
+			transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+		}
+
+		.btn:active {
+			transform: scale(0.97);
+		}
+
+		.btn-primary {
+			background: var(--amber);
+			color: #1B1E20;
+		}
+
+		.btn-primary:hover {
+			background: #ffc350;
+		}
+
+		.btn-primary:disabled {
+			background: var(--surface-2);
+			color: var(--text-dim);
+			cursor: not-allowed;
+		}
+
+		.btn-ghost {
+			background: transparent;
+			border: 1px solid var(--border);
+			color: var(--text);
+		}
+
+		.btn-ghost:hover {
+			border-color: var(--text-dim);
+		}
+
+		.drop-hint {
+			transition: border-color 0.2s ease, background 0.2s ease;
+		}
+
+		.drop-hint.drag-over {
+			border-color: var(--amber);
+			background: rgba(255, 176, 32, 0.06);
+		}
+
+		details>summary {
+			cursor: pointer;
+			list-style: none;
+		}
+
+		details>summary::-webkit-details-marker {
+			display: none;
+		}
+
+		details[open] .chevron {
+			transform: rotate(90deg);
+		}
+
+		.chevron {
+			transition: transform 0.2s ease;
+		}
+
+		:focus-visible {
+			outline: 2px solid var(--amber);
+			outline-offset: 2px;
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.viewfinder.scanning .scanline {
+				animation: none;
+				opacity: 1;
+				top: 45%;
+			}
+
+			.status-dot.live {
+				animation: none;
 			}
 		}
 	</style>
 </head>
 
-<body class="bg-gray-100 font-sans">
-	<div class="max-w-6xl mx-auto py-10">
-		<h1 class="text-3xl font-bold text-center text-indigo-800 mb-8">
-			Object Classification
-		</h1>
+<body class="grid-backdrop min-h-screen">
+	<div class="max-w-5xl mx-auto px-6 py-14">
 
-		<div class="grid md:grid-cols-2 gap-8">
-			
-			<div class="flex flex-col items-center">
-				<div
-					class="relative border border-indigo-700 w-72 h-72 flex justify-center items-center rounded-lg bg-white shadow-md">
-					<video autoplay id="video" class="w-full h-full object-cover p-2 rounded-lg"
-						poster="https://img.freepik.com/free-vector/group-young-people-posing-photo_52683-18824.jpg?size=338&ext=jpg"></video>
-					<img src="" id="photo" class="absolute w-full h-full object-cover p-2 hidden rounded-lg" />
+		<!-- Header -->
+		<div class="mb-10">
+			<div class="hud-label mb-2">CV-MODEL / INFERENCE CONSOLE</div>
+			<h1 class="font-display text-3xl md:text-4xl font-semibold tracking-tight">
+				Vision Scan
+			</h1>
+			<p class="text-sm text-[var(--text-dim)] mt-2 max-w-md">
+				Load an image and run it through the classifier. The frame locks green on a
+				confident read, red if the request fails.
+			</p>
+		</div>
+
+		<div class="grid md:grid-cols-2 gap-6 items-start">
+
+			<!-- Left: viewfinder -->
+			<div>
+				<div id="viewfinder" class="viewfinder rounded-xl aspect-square flex items-center justify-center">
+					<div class="scanline"></div>
+					<div class="bracket tl"></div>
+					<div class="bracket tr"></div>
+					<div class="bracket bl"></div>
+					<div class="bracket br"></div>
+
+					<img src="" id="photo" class="hidden absolute inset-0 w-full h-full object-cover" />
+
+					<div id="empty-state" class="text-center px-8">
+						<div class="font-mono text-xs text-[var(--text-dim)] tracking-widest mb-1">NO SIGNAL</div>
+						<p class="text-sm text-[var(--text-dim)]">Load an image to begin</p>
+					</div>
+
 					<canvas id="canvas" class="hidden"></canvas>
 				</div>
 
-				<div class="mt-5 w-80">
-					<div class="flex justify-between space-x-4">
-						<button type="button" id="uload"
-							class="w-1/2 bg-indigo-700 hover:bg-indigo-800 text-white py-2 rounded-lg transition">
-							Upload
-						</button>
-						<button type="button" id="send"
-							class="w-1/2 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg transition">
-							Predict
-						</button>
-					</div>
-					<input type="file" id="fileinput" class="hidden" />
-					<input type="hidden" id="url" value="../predict" />
+				<!-- Drop / upload zone -->
+				<label id="drop-hint" for="fileinput"
+					class="drop-hint mt-4 flex items-center justify-center gap-2 border border-dashed border-[var(--border)] rounded-xl py-3 text-sm text-[var(--text-dim)] cursor-pointer hover:text-[var(--text)]">
+					<span>Drag an image here, or</span>
+					<span class="underline decoration-dotted">browse files</span>
+				</label>
+				<input type="file" id="fileinput" accept="image/*" class="hidden" />
+				<input type="hidden" id="url" value="../predict" />
+
+				<div class="flex gap-3 mt-4">
+					<button type="button" id="send" disabled
+						class="btn btn-primary flex-1 font-medium py-2.5 rounded-lg text-sm">
+						Run scan
+					</button>
+					<button type="button" id="reset" class="btn btn-ghost px-4 py-2.5 rounded-lg text-sm">
+						Clear
+					</button>
 				</div>
 			</div>
 
-			
-			<div class="bg-white border border-gray-300 rounded-lg shadow-md p-5">
-				<h2 class="text-lg font-semibold text-center text-indigo-700 mb-3">
-					Prediction Results
-				</h2>
+			<!-- Right: readout -->
+			<div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 h-full">
+				<div class="flex items-center justify-between mb-5">
+					<div class="hud-label">READOUT</div>
+					<div class="flex items-center gap-2">
+						<div id="status-dot" class="status-dot"></div>
+						<span id="status-text" class="font-mono text-xs text-[var(--text-dim)]">idle</span>
+					</div>
+				</div>
 
-				<div class="grid grid-cols-2 gap-4">
-					<div
-						class="border border-gray-200 p-2 rounded-lg h-80 overflow-hidden flex justify-center items-center bg-gray-50 res-part2">
+				<!-- Empty readout -->
+				<div id="readout-empty" class="text-sm text-[var(--text-dim)]">
+					Results appear here once a scan completes.
+				</div>
+
+				<!-- Result readout -->
+				<div id="readout-result" class="hidden">
+					<div class="font-display text-2xl font-semibold mb-1" id="result-label">—</div>
+					<div class="font-mono text-xs text-[var(--text-dim)] mb-4" id="result-sub">confidence</div>
+
+					<div class="meter-track mb-6">
+						<div class="meter-fill" id="meter-fill"></div>
 					</div>
-					<div class="border border-gray-200 p-2 rounded-lg h-80 overflow-auto bg-gray-50 res-part">
-						<div class="jsonRes text-sm font-mono whitespace-pre-wrap"></div>
+
+					<div id="result-image-wrap" class="hidden mb-5">
+						<div class="hud-label mb-2">ANNOTATED FRAME</div>
+						<div class="border border-[var(--border)] rounded-lg overflow-hidden">
+							<img id="result-image" class="w-full object-cover" />
+						</div>
 					</div>
+
+					<details>
+						<summary class="flex items-center gap-1.5 hud-label hover:text-[var(--text)]">
+							<span class="chevron">▸</span> RAW RESPONSE
+						</summary>
+						<pre id="raw-json"
+							class="font-mono text-xs text-[var(--text-dim)] mt-3 whitespace-pre-wrap leading-relaxed"></pre>
+					</details>
+				</div>
+
+				<!-- Error readout -->
+				<div id="readout-error" class="hidden text-sm">
+					<div class="font-mono text-xs text-[var(--red)] mb-1">SCAN FAILED</div>
+					<p class="text-[var(--text-dim)]">Couldn't reach the prediction endpoint. Check the API is running
+						and try again.</p>
 				</div>
 			</div>
 		</div>
 	</div>
 
-	
-	<div id="loading">
-		<div class="loader"></div>
-	</div>
-
-	
 	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
 	<script>
-		var myvideo = document.getElementById('video');
-		var myphoto = document.getElementById('photo');
 		var base_data = "";
+		var $vf = $("#viewfinder");
+
+		function setStatus(state, label) {
+			var $dot = $("#status-dot");
+			$dot.removeClass("live done fail");
+			if (state) $dot.addClass(state);
+			$("#status-text").text(label);
+		}
+
+		function setViewfinder(state) {
+			$vf.removeClass("scanning locked error");
+			if (state) $vf.addClass(state);
+		}
+
+		function showFrame(dataUrl) {
+			$("#photo").attr("src", dataUrl).removeClass("hidden");
+			$("#empty-state").addClass("hidden");
+		}
+
+		function loadFile(file) {
+			if (!file) return;
+			var reader = new FileReader();
+			reader.onload = function (e) {
+				var url = e.target.result;
+				var img = new Image();
+				img.crossOrigin = "Anonymous";
+				img.onload = function () {
+					var canvas = document.createElement("canvas");
+					var ctx = canvas.getContext("2d");
+					canvas.height = this.height;
+					canvas.width = this.width;
+					ctx.drawImage(this, 0, 0);
+					base_data = canvas.toDataURL("image/jpeg", 1.0).replace(/^data:image.+;base64,/, "");
+					canvas = null;
+				};
+				img.src = url;
+				showFrame(url);
+				setViewfinder(null);
+				setStatus(null, "ready");
+				$("#send").prop("disabled", false);
+				$("#readout-empty").removeClass("hidden");
+				$("#readout-result, #readout-error").addClass("hidden");
+			};
+			reader.readAsDataURL(file);
+		}
+
+		function animateConfidence(pct) {
+			$("#meter-fill").css("width", Math.max(0, Math.min(100, pct)) + "%");
+		}
+
+		// Try to pull a friendly label + confidence out of whatever shape the API returns.
+		function parsePrediction(json) {
+			var label = null, confidence = null;
+			try {
+				var candidate = Array.isArray(json) ? json[0] : json;
+				if (candidate) {
+					if (Array.isArray(candidate)) candidate = candidate[0];
+					label = candidate.image || candidate.label || candidate.class || candidate.prediction || null;
+					var conf = candidate.confidence ?? candidate.probability ?? candidate.score ?? null;
+					if (conf !== null && conf !== undefined) {
+						confidence = conf <= 1 ? conf * 100 : conf;
+					}
+				}
+			} catch (e) { }
+			return { label: label, confidence: confidence };
+		}
 
 		function sendRequest(base64Data) {
-			if (base64Data) {
-				var url = $("#url").val();
-				$("#loading").show();
-				$.ajax({
-					url: url,
-					type: "POST",
-					cache: false,
-					async: true,
-					crossDomain: true,
-					headers: {
-						"Content-Type": "application/json",
-						"Access-Control-Allow-Origin": "*",
-					},
-					data: JSON.stringify({ image: base64Data }),
-					success: function (res) {
-						$(".res-part").html("");
-						$(".res-part2").html("");
-						try {
-							var imageData = res[1].image;
-							if (imageData && imageData.length > 100) {
-								$(".res-part2").append(
-									"<img class='rounded-lg object-cover h-72' src='data:image/jpeg;base64," +
-									imageData +
-									"' alt='' />"
-								);
-							}
-						} catch (e) { }
-						$(".res-part").html(
-							"<pre>" + JSON.stringify(res[0], undefined, 2) + "</pre>"
-						);
-						$("#loading").hide();
-					},
-					error: function () {
-						$("#loading").hide();
-						alert("Prediction request failed. Check API endpoint.");
-					},
-				});
-			}
+			if (!base64Data) return;
+			var url = $("#url").val();
+
+			setViewfinder("scanning");
+			setStatus("live", "scanning");
+			$("#send").prop("disabled", true);
+			$("#readout-empty, #readout-result, #readout-error").addClass("hidden");
+
+			$.ajax({
+				url: url,
+				type: "POST",
+				cache: false,
+				async: true,
+				crossDomain: true,
+				headers: {
+					"Content-Type": "application/json",
+					"Access-Control-Allow-Origin": "*",
+				},
+				data: JSON.stringify({ image: base64Data }),
+				success: function (res) {
+					setViewfinder("locked");
+					setStatus("done", "locked");
+
+					var parsed = parsePrediction(res);
+					$("#result-label").text(parsed.label || "Prediction received");
+					$("#result-sub").text(
+						parsed.confidence !== null ? parsed.confidence.toFixed(1) + "% confidence" : "see raw response"
+					);
+					animateConfidence(parsed.confidence !== null ? parsed.confidence : 100);
+
+					try {
+						var annotated = res[1] && res[1].image;
+						if (annotated && annotated.length > 100) {
+							$("#result-image").attr("src", "data:image/jpeg;base64," + annotated);
+							$("#result-image-wrap").removeClass("hidden");
+						} else {
+							$("#result-image-wrap").addClass("hidden");
+						}
+					} catch (e) {
+						$("#result-image-wrap").addClass("hidden");
+					}
+
+					$("#raw-json").text(JSON.stringify(res, undefined, 2));
+					$("#readout-result").removeClass("hidden");
+					$("#send").prop("disabled", false);
+				},
+				error: function () {
+					setViewfinder("error");
+					setStatus("fail", "error");
+					$("#readout-error").removeClass("hidden");
+					$("#send").prop("disabled", false);
+				},
+			});
 		}
 
 		$(document).ready(function () {
-			$("#loading").hide();
+			$("#send").click(function () { sendRequest(base_data); });
 
-			$("#send").click(function () {
-				sendRequest(base_data);
-			});
-
-			$("#uload").click(function () {
-				$("#fileinput").trigger("click");
+			$("#reset").click(function () {
+				base_data = "";
+				$("#photo").addClass("hidden").attr("src", "");
+				$("#empty-state").removeClass("hidden");
+				setViewfinder(null);
+				setStatus(null, "idle");
+				$("#send").prop("disabled", true);
+				$("#readout-empty").removeClass("hidden");
+				$("#readout-result, #readout-error").addClass("hidden");
+				$("#fileinput").val("");
 			});
 
 			$("#fileinput").change(function () {
-				if (this.files && this.files[0]) {
-					var reader = new FileReader();
-					reader.onload = function (e) {
-						var url = e.target.result;
-						var img = new Image();
-						img.crossOrigin = "Anonymous";
-						img.onload = function () {
-							var canvas = document.createElement("canvas");
-							var ctx = canvas.getContext("2d");
-							canvas.height = this.height;
-							canvas.width = this.width;
-							ctx.drawImage(this, 0, 0);
-							base_data = canvas
-								.toDataURL("image/jpeg", 1.0)
-								.replace(/^data:image.+;base64,/, "");
-							canvas = null;
-						};
-						img.src = url;
-						$("#photo").attr("src", url).show();
-						$("#video").hide();
-					};
-					reader.readAsDataURL(this.files[0]);
-				}
+				if (this.files && this.files[0]) loadFile(this.files[0]);
+			});
+
+			// Drag & drop
+			var $hint = $("#drop-hint");
+			$hint.on("dragover", function (e) {
+				e.preventDefault();
+				$hint.addClass("drag-over");
+			});
+			$hint.on("dragleave", function () { $hint.removeClass("drag-over"); });
+			$hint.on("drop", function (e) {
+				e.preventDefault();
+				$hint.removeClass("drag-over");
+				var file = e.originalEvent.dataTransfer.files[0];
+				if (file) loadFile(file);
 			});
 		});
 	</script>
 </body>
 
-</html> 
+</html>
