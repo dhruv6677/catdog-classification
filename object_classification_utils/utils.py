@@ -2,7 +2,7 @@ import base64
 from PIL import Image
 import io
 import numpy as np
-
+# 
 
 def decodeImage(imgstring, fileName):
     # Remove data:image/... prefix if exists
